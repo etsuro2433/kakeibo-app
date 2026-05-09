@@ -9,10 +9,11 @@ import {
   useMemo,
   useState,
 } from "react";
-import { AppData, Budget, Category, Transaction } from "@/lib/types";
+import { AppData, Budget, Category, RecurringRule, Transaction } from "@/lib/types";
 import { INITIAL_DATA } from "@/lib/defaults";
 import { loadData, saveData } from "@/lib/storage";
 import { uid } from "@/lib/utils";
+import { applyRecurring } from "@/lib/recurring";
 
 interface DataContextValue {
   data: AppData;
@@ -29,6 +30,11 @@ interface DataContextValue {
   removeCard: (name: string) => void;
   replaceAll: (next: AppData) => void;
   bulkAddTransactions: (txs: Transaction[], newCats: Category[]) => void;
+  addRecurring: (
+    rule: Omit<RecurringRule, "id" | "createdAt" | "generatedMonths">
+  ) => RecurringRule;
+  updateRecurring: (id: string, patch: Partial<RecurringRule>) => void;
+  deleteRecurring: (id: string) => void;
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
@@ -38,7 +44,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    setData(loadData());
+    const loaded = loadData();
+    const result = applyRecurring(loaded.recurring);
+    if (result.changed) {
+      setData({
+        ...loaded,
+        recurring: result.updatedRules,
+        transactions: [...result.newTransactions, ...loaded.transactions],
+      });
+    } else {
+      setData(loaded);
+    }
     setReady(true);
   }, []);
 
@@ -124,6 +140,44 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const addRecurring = useCallback(
+    (rule: Omit<RecurringRule, "id" | "createdAt" | "generatedMonths">): RecurringRule => {
+      const full: RecurringRule = {
+        ...rule,
+        id: uid("rec"),
+        createdAt: new Date().toISOString(),
+        generatedMonths: [],
+      };
+      setData((d) => {
+        const nextRules = [...d.recurring, full];
+        const result = applyRecurring(nextRules);
+        return {
+          ...d,
+          recurring: result.changed ? result.updatedRules : nextRules,
+          transactions: [...result.newTransactions, ...d.transactions],
+        };
+      });
+      return full;
+    },
+    []
+  );
+
+  const updateRecurring = useCallback((id: string, patch: Partial<RecurringRule>) => {
+    setData((d) => {
+      const updated = d.recurring.map((r) => (r.id === id ? { ...r, ...patch } : r));
+      const result = applyRecurring(updated);
+      return {
+        ...d,
+        recurring: result.changed ? result.updatedRules : updated,
+        transactions: [...result.newTransactions, ...d.transactions],
+      };
+    });
+  }, []);
+
+  const deleteRecurring = useCallback((id: string) => {
+    setData((d) => ({ ...d, recurring: d.recurring.filter((r) => r.id !== id) }));
+  }, []);
+
   const value = useMemo<DataContextValue>(
     () => ({
       data,
@@ -140,6 +194,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       removeCard,
       replaceAll,
       bulkAddTransactions,
+      addRecurring,
+      updateRecurring,
+      deleteRecurring,
     }),
     [
       data,
@@ -156,6 +213,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       removeCard,
       replaceAll,
       bulkAddTransactions,
+      addRecurring,
+      updateRecurring,
+      deleteRecurring,
     ]
   );
 

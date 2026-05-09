@@ -18,6 +18,7 @@ export function loadData(): AppData {
       cards: parsed.cards ?? INITIAL_DATA.cards,
       transactions: parsed.transactions ?? [],
       budgets: parsed.budgets ?? [],
+      recurring: parsed.recurring ?? [],
     };
   } catch {
     return INITIAL_DATA;

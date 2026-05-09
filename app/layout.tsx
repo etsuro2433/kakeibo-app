@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { DataProvider } from "@/components/DataProvider";
 import Nav from "@/components/Nav";
@@ -6,6 +6,23 @@ import Nav from "@/components/Nav";
 export const metadata: Metadata = {
   title: "家計簿アプリ",
   description: "シンプルでクリーンな家計簿・収支管理アプリ",
+  applicationName: "家計簿",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "家計簿",
+  },
+  formatDetection: {
+    telephone: false,
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0284c7",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

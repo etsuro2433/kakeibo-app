@@ -27,5 +27,6 @@ export const INITIAL_DATA: AppData = {
   categories: DEFAULT_CATEGORIES,
   budgets: [],
   cards: DEFAULT_CARDS,
-  version: 1,
+  recurring: [],
+  version: 2,
 };

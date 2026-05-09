@@ -8,6 +8,7 @@ const LINKS = [
   { href: "/", label: "ダッシュボード" },
   { href: "/transactions", label: "取引" },
   { href: "/cards", label: "クレカ・固定費" },
+  { href: "/recurring", label: "定期" },
   { href: "/budgets", label: "予算" },
   { href: "/settings", label: "設定" },
 ];
