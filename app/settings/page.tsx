@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import { exportCSV, importCSV } from "@/lib/csv";
 import { INITIAL_DATA } from "@/lib/defaults";
+import { setHouseholdId } from "@/lib/household";
 import { Category, TransactionType } from "@/lib/types";
 
 const PALETTE = [
@@ -15,6 +16,8 @@ const PALETTE = [
 export default function SettingsPage() {
   const {
     data,
+    cloudEnabled,
+    householdId,
     addCategory,
     updateCategory,
     deleteCategory,
@@ -27,6 +30,22 @@ export default function SettingsPage() {
   const [newCat, setNewCat] = useState({ name: "", type: "expense" as TransactionType, color: PALETTE[0] });
   const [newCard, setNewCard] = useState("");
   const [importMsg, setImportMsg] = useState("");
+  const [joinCode, setJoinCode] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  function copyHouseholdId() {
+    navigator.clipboard.writeText(householdId);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  function joinHousehold(e: React.FormEvent) {
+    e.preventDefault();
+    if (!joinCode.trim()) return;
+    if (!confirm("世帯コードを変更するとこのデバイスのデータが切り替わります。続けますか?")) return;
+    setHouseholdId(joinCode.trim());
+    window.location.reload();
+  }
 
   function downloadCSV() {
     const csv = exportCSV(data.transactions, data.categories);
@@ -174,6 +193,37 @@ export default function SettingsPage() {
           (type は income/expense, costType は fixed/variable, paymentMethod は cash/bank/credit_card/e_money)
         </p>
       </section>
+
+      {cloudEnabled && (
+        <section className="card space-y-3">
+          <h2 className="text-sm font-semibold">家族共有 — 世帯コード</h2>
+          <p className="text-xs text-slate-500">
+            このコードを家族に伝えると、同じデータをリアルタイムで共有できます。
+          </p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 break-all select-all">
+              {householdId}
+            </code>
+            <button onClick={copyHouseholdId} className="btn-secondary shrink-0">
+              {copied ? "✓ コピー済" : "コピー"}
+            </button>
+          </div>
+          <div className="pt-1">
+            <p className="text-xs font-medium text-slate-600 mb-1">
+              家族の世帯コードに参加する
+            </p>
+            <form onSubmit={joinHousehold} className="flex gap-2">
+              <input
+                className="input flex-1 font-mono text-xs"
+                placeholder="家族から受け取ったコードを貼り付け"
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value)}
+              />
+              <button type="submit" className="btn-primary shrink-0">切り替え</button>
+            </form>
+          </div>
+        </section>
+      )}
 
       <section className="card space-y-3">
         <h2 className="text-sm font-semibold">データのリセット</h2>
