@@ -6,6 +6,13 @@
 # ============================================================================
 
 $ErrorActionPreference = 'Stop'
+
+# Excel COM の locale 問題を回避するため、現在スレッドのカルチャを en-US に強制
+[System.Threading.Thread]::CurrentThread.CurrentCulture =
+    [System.Globalization.CultureInfo]::CreateSpecificCulture('en-US')
+[System.Threading.Thread]::CurrentThread.CurrentUICulture =
+    [System.Globalization.CultureInfo]::CreateSpecificCulture('en-US')
+
 $here = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
 # --- 入出力ファイル ---------------------------------------------------------
@@ -27,10 +34,31 @@ if (-not (Test-Path $srcXlsx)) {
 }
 
 $srcXlsx = (Resolve-Path $srcXlsx).Path
-$dstXlsm = [System.IO.Path]::GetFullPath((Join-Path (Split-Path $srcXlsx -Parent) '企業リスト_作業中.xlsm'))
+$origDir = Split-Path $srcXlsx -Parent
+$dstXlsm = [System.IO.Path]::GetFullPath((Join-Path $origDir '企業リスト_作業中.xlsm'))
+
+# 日本語パスは Excel COM で問題が起きやすいので、一旦 C:\Temp の ASCII パスにコピー
+$tmpDir = 'C:\Temp\kaden_setup'
+$tmpXlsx = Join-Path $tmpDir 'src.xlsx'
+$tmpXlsm = Join-Path $tmpDir 'dst.xlsm'
+$tmpMacros = Join-Path $tmpDir 'macros'
 
 Write-Host "[1/6] ソース: $srcXlsx"
 Write-Host "      出力先: $dstXlsm"
+Write-Host "      一時ワーク: $tmpDir"
+
+# 一時ディレクトリを準備
+if (Test-Path $tmpDir) { Remove-Item $tmpDir -Recurse -Force }
+New-Item -ItemType Directory -Path $tmpDir | Out-Null
+New-Item -ItemType Directory -Path $tmpMacros | Out-Null
+Copy-Item $srcXlsx $tmpXlsx -Force
+Copy-Item (Join-Path $macrosDir '*') $tmpMacros -Recurse -Force
+
+# 以降は一時パスで処理する
+$srcXlsx = $tmpXlsx
+$macrosDir = $tmpMacros
+$finalDst = $dstXlsm
+$dstXlsm = $tmpXlsm.Replace('.xlsx','.xlsm')
 
 # --- AccessVBOM を一時的に ON にする (元値を覚えておいて後で復元) ------------
 Write-Host "[2/6] VBAプロジェクトへのアクセスを一時的に許可..."
@@ -53,15 +81,35 @@ $excel = $null
 $wb = $null
 try {
     Write-Host "[3/6] Excel を起動..."
+    # 既存の Excel プロセスが残っていると COM が混乱するので終了させる
+    Get-Process -Name EXCEL -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+
     $excel = New-Object -ComObject Excel.Application
     $excel.Visible = $true        # 見える状態にする (ダイアログを見逃さないため)
     $excel.DisplayAlerts = $false
+    $excel.AskToUpdateLinks = $false
     $excel.AutomationSecurity = 3  # msoAutomationSecurityForceDisable
-    Start-Sleep -Seconds 2
-
-    Write-Host "[4/6] xlsx を開く... (Excel が画面に見えているはずです)"
-    $wb = $excel.Workbooks.Open($srcXlsx, 0, $false)
+    $excel.EnableEvents = $false
     Start-Sleep -Seconds 3
+
+    Write-Host "[4/6] xlsx を開く: $srcXlsx"
+    # 名前付き引数で確実に渡す
+    $wb = $excel.Workbooks.Open(
+        $srcXlsx,           # Filename
+        0,                  # UpdateLinks
+        $false,             # ReadOnly
+        [Type]::Missing,    # Format
+        [Type]::Missing,    # Password
+        [Type]::Missing,    # WriteResPassword
+        $true,              # IgnoreReadOnlyRecommended
+        [Type]::Missing,    # Origin
+        [Type]::Missing,    # Delimiter
+        $false,             # Editable
+        $false              # Notify
+    )
+    Start-Sleep -Seconds 3
+    if ($null -eq $wb) { throw "Workbook open failed" }
 
     # --- VBA モジュールをインポート -----------------------------------------
     Write-Host "      VBProject へアクセス中..."
@@ -151,12 +199,21 @@ try {
     # 52 = xlOpenXMLWorkbookMacroEnabled
     $wb.SaveAs($dstXlsm, 52)
     Start-Sleep -Seconds 2
-    Write-Host "  保存完了: $dstXlsm"
+    Write-Host "  一時保存先: $dstXlsm"
 
     $wb.Close($false)
     $wb = $null
     $excel.Quit()
     $excel = $null
+    Start-Sleep -Seconds 2
+
+    # 最終的な日本語パス先にコピー
+    if (Test-Path $finalDst) { Remove-Item $finalDst -Force }
+    Copy-Item $dstXlsm $finalDst -Force
+    Write-Host "  最終保存先: $finalDst" -ForegroundColor Green
+
+    # 一時ディレクトリは掃除
+    try { Remove-Item $tmpDir -Recurse -Force } catch {}
 }
 finally {
     if ($wb -ne $null) {
