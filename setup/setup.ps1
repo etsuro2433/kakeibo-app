@@ -54,15 +54,26 @@ $wb = $null
 try {
     Write-Host "[3/6] Excel を起動..."
     $excel = New-Object -ComObject Excel.Application
-    $excel.Visible = $false
+    $excel.Visible = $true        # 見える状態にする (ダイアログを見逃さないため)
     $excel.DisplayAlerts = $false
     $excel.AutomationSecurity = 3  # msoAutomationSecurityForceDisable
+    Start-Sleep -Seconds 2
 
-    Write-Host "[4/6] xlsx を開く..."
+    Write-Host "[4/6] xlsx を開く... (Excel が画面に見えているはずです)"
     $wb = $excel.Workbooks.Open($srcXlsx, 0, $false)
+    Start-Sleep -Seconds 3
 
     # --- VBA モジュールをインポート -----------------------------------------
-    $vbProj = $wb.VBProject
+    Write-Host "      VBProject へアクセス中..."
+    try {
+        $vbProj = $wb.VBProject
+    } catch {
+        Write-Host "ERROR: VBAプロジェクトへのアクセスができません。" -ForegroundColor Red
+        Write-Host "       Excel のオプション → セキュリティセンター → マクロの設定 →" -ForegroundColor Yellow
+        Write-Host "       「VBAプロジェクトオブジェクトモデルへのアクセスを信頼する」にチェックを入れてください。" -ForegroundColor Yellow
+        Write-Host "       チェックを入れたら、このスクリプトを再実行してください。" -ForegroundColor Yellow
+        throw $_
+    }
     $modFiles = @(
         @{Name='modKaden';       Path = Join-Path $macrosDir 'modKaden.bas'};
         @{Name='modDatePicker';  Path = Join-Path $macrosDir 'modDatePicker.bas'};
@@ -135,13 +146,17 @@ try {
     }
 
     # --- .xlsm として保存 ---------------------------------------------------
+    Write-Host "  .xlsm として保存中..."
     if (Test-Path $dstXlsm) { Remove-Item $dstXlsm -Force }
     # 52 = xlOpenXMLWorkbookMacroEnabled
     $wb.SaveAs($dstXlsm, 52)
+    Start-Sleep -Seconds 2
     Write-Host "  保存完了: $dstXlsm"
 
     $wb.Close($false)
     $wb = $null
+    $excel.Quit()
+    $excel = $null
 }
 finally {
     if ($wb -ne $null) {
