@@ -1,6 +1,6 @@
 @echo off
 REM ===========================================================
-REM   KadenList Setup - ASCII only to avoid mojibake
+REM   KadenList Setup (VBScript-based for better COM stability)
 REM ===========================================================
 chcp 65001 > nul
 cd /d "%~dp0"
@@ -16,7 +16,8 @@ echo.
 echo Press any key to start...
 pause > nul
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0setup.ps1"
+REM Use cscript so output appears in this console window
+cscript.exe //NoLogo //U "%~dp0setup.vbs"
 set RC=%ERRORLEVEL%
 
 if %RC% NEQ 0 (
@@ -30,7 +31,7 @@ if %RC% NEQ 0 (
 echo.
 echo ===========================================================
 echo   DONE!
-echo   Open: output\KigyoList_WIP.xlsm  (or the .xlsm in output/)
+echo   Open: output\KigyoList_WIP.xlsm (the .xlsm in output/)
 echo   Click "Enable Content" on the yellow security bar.
 echo ===========================================================
 echo.
